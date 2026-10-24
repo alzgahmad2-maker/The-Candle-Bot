@@ -105,9 +105,45 @@ def fetch_candles(symbol, tf):
         return None
 
 def generate_advanced_signal(df, symbol):
-    """نظام إشارات متعدد المؤشرات (AI Simulation)"""
+    """نظام إشارات محسن (حساس أكثر ويعطي صفقات)"""
     if df is None or len(df) < 50:
         return "NEUTRAL", "بيانات غير كافية", 0
+
+    try:
+        window = MarketDataWindow.from_arrays(
+            symbol=symbol, open_=df['open'].values, high=df['high'].values,
+            low=df['low'].values, close=df['close'].values, volume=df['volume'].values,
+        )
+        
+        # 1. جعل المؤشرات أسرع وأكثر حساسية
+        ma_cross = MACrossover(fast_period=5, slow_period=13) 
+        rsi_reversion = RSIMeanReversion(period=14, oversold=40, overbought=60) 
+        
+        aggregator = SignalAggregator([ma_cross, rsi_reversion])
+        bundle = aggregator.generate(window)
+
+        # 2. إذا أعطت المؤشرات إشارة، نعتمدها فوراً
+        if bundle and bundle.signals:
+            strongest = max(bundle.signals, key=lambda s: s.strength)
+            is_bullish = "bullish" in str(strongest.direction).lower() or "long" in str(strongest.direction).lower()
+            
+            direction = "CALL (صعود)" if is_bullish else "PUT (هبوط)"
+            confidence = min(int((strongest.strength + 0.3) * 100), 95) # رفع نسبة الثقة
+            return direction, f"إشارة قوية من ({strongest.source})", confidence
+            
+        # 3. خطة بديلة (إذا كانت المؤشرات صامتة، نستخدم المتوسطات السريعة لضمان وجود إشارة)
+        else:
+            close_prices = df['close']
+            ema_5 = close_prices.ewm(span=5, adjust=False).mean()
+            ema_13 = close_prices.ewm(span=13, adjust=False).mean()
+            
+            if ema_5.iloc[-1] > ema_13.iloc[-1]:
+                return "CALL (صعود)", "تحليل الاتجاه السريع (صاعد)", 60
+            else:
+                return "PUT (هبوط)", "تحليل الاتجاه السريع (هابط)", 60
+                
+    except Exception as e:
+        return "NEUTRAL", f"خطأ في التحليل: {e}", 0
 
     try:
         window = MarketDataWindow.from_arrays(
