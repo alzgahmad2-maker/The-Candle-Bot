@@ -2,6 +2,5 @@ streamlit
 pandas
 numpy
 yfinance
-otcharts
 pyalbedo
-html2image
+matplotlib
