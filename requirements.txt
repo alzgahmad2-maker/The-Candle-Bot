@@ -4,3 +4,4 @@ numpy
 yfinance
 pyalbedo
 matplotlib
+plotly
