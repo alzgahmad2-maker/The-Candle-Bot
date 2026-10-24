@@ -10,79 +10,124 @@ from io import BytesIO
 import time
 import plotly.graph_objects as go
 
-# --- 1. إعدادات الصفحة والتصميم الاحترافي ---
-st.set_page_config(page_title="The Candle Bot | Premium", page_icon="🕯️", layout="wide")
+# --- 1. إعدادات الصفحة والتصميم الفاخر ---
+st.set_page_config(page_title="The Candle Bot | Premium", page_icon="🕯️", layout="centered")
 
+# استيراد خط عربي احترافي + تصميم CSS متقدم
 st.markdown("""
 <style>
-    /* خلفية وتصميم عام */
-    .stApp { background: linear-gradient(180deg, #0E1117 0%, #1A1F2B 100%); }
+    @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap');
     
-    /* عنوان متوهج */
+    /* إخفاء عناصر Streamlit الافتراضية */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
+    
+    /* الخلفية العامة والتخطيط */
+    .stApp { 
+        background: radial-gradient(circle at top, #1A1F2B 0%, #0E1117 100%);
+        font-family: 'Cairo', sans-serif;
+    }
+    
+    /* العنوان الرئيسي */
     .main-header { 
-        font-size: 3.5rem; color: #FFD700; text-align: center; 
-        font-family: 'Arial', sans-serif; font-weight: 900;
-        text-shadow: 0 0 10px #FFD700, 0 0 20px #FF8C00, 0 0 30px #FF8C00; 
+        font-size: 2.8rem; color: #FFD700; text-align: center; 
+        font-weight: 900; margin-bottom: 0px;
+        text-shadow: 0 0 15px rgba(255, 215, 0, 0.4); 
     }
-    
-    /* صندوق الإشارة */
-    .signal-box { 
-        padding: 30px; border-radius: 15px; text-align: center; 
-        font-size: 2.8rem; font-weight: bold; margin: 20px 0; 
-        box-shadow: 0 8px 32px 0 rgba(0,0,0,0.37);
-        backdrop-filter: blur(4px); border: 1px solid rgba(255, 255, 255, 0.18);
-        animation: pulse 2s infinite;
-    }
-    .signal-call { background: rgba(17, 153, 142, 0.8); color: white; border-left: 10px solid #38ef7d; }
-    .signal-put { background: rgba(203, 45, 62, 0.8); color: white; border-left: 10px solid #ef473a; }
-    .signal-neutral { background: rgba(117, 127, 154, 0.8); color: white; border-left: 10px solid #D7DDE8; }
-    
-    @keyframes pulse {
-        0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255, 215, 0, 0.7); }
-        70% { transform: scale(1.02); box-shadow: 0 0 0 15px rgba(255, 215, 0, 0); }
-        100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255, 215, 0, 0); }
+    .sub-header {
+        text-align: center; color: #A0AAB5; font-size: 1rem; margin-bottom: 30px;
     }
 
-    /* زر البحث */
+    /* تصميم صناديق الإشارات (Glassmorphism) */
+    .signal-box { 
+        padding: 30px; border-radius: 20px; text-align: center; 
+        font-size: 2.2rem; font-weight: 900; margin: 20px 0; 
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        box-shadow: 0 8px 32px 0 rgba(0,0,0,0.5);
+        animation: fade-in 0.5s ease-out;
+    }
+    .signal-call { 
+        background: rgba(56, 239, 125, 0.1); 
+        color: #38ef7d; 
+        border-left: 5px solid #38ef7d;
+        box-shadow: 0 0 20px rgba(56, 239, 125, 0.2);
+    }
+    .signal-put { 
+        background: rgba(239, 71, 58, 0.1); 
+        color: #ef473a; 
+        border-left: 5px solid #ef473a;
+        box-shadow: 0 0 20px rgba(239, 71, 58, 0.2);
+    }
+    .signal-neutral { 
+        background: rgba(117, 127, 154, 0.1); 
+        color: #A0AAB5; 
+        border-left: 5px solid #A0AAB5;
+    }
+
+    /* تصميم الأزرار */
     .stButton>button { 
         background: linear-gradient(135deg, #FFD700, #FF8C00); 
-        color: black; font-weight: 900; font-size: 1.3rem; 
-        border: none; border-radius: 10px; padding: 15px 30px;
+        color: #000; font-weight: 900; font-size: 1.1rem; 
+        border: none; border-radius: 12px; padding: 12px 24px;
         transition: all 0.3s ease; width: 100%;
+        box-shadow: 0 4px 15px rgba(255, 215, 0, 0.3);
     }
-    .stButton>button:hover { transform: translateY(-3px); box-shadow: 0px 10px 20px rgba(255, 215, 0, 0.4); }
+    .stButton>button:hover { 
+        transform: translateY(-2px); 
+        box-shadow: 0 6px 20px rgba(255, 215, 0, 0.5); 
+    }
+
+    /* بطاقات الإحصائيات */
+    .stat-card {
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        border-radius: 15px;
+        padding: 15px;
+        text-align: center;
+        margin-bottom: 10px;
+    }
+    
+    /* تنسيق الشريط الجانبي */
+    .css-1d391kg { background-color: #0E1117; }
+    
+    @keyframes fade-in {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
 </style>
 """, unsafe_allow_html=True)
 
-# تأثير صوتي احترافي
+# تأثير صوتي
 def play_sound():
-    audio_html = """
+    st.markdown("""
     <audio autoplay>
         <source src="https://assets.mixkit.co/active_storage/sfx/2568/2568-preview.mp3" type="audio/mpeg">
     </audio>
-    """
-    st.markdown(audio_html, unsafe_allow_html=True)
+    """, unsafe_allow_html=True)
 
 # --- 2. الشريط الجانبي (المدخلات) ---
-st.sidebar.markdown("<h2 style='text-align: center; color: #FFD700;'>⚙️ لوحة التحكم</h2>", unsafe_allow_html=True)
+with st.sidebar:
+    st.markdown("<h2 style='text-align: center; color: #FFD700; font-family: Cairo;'>⚙️ الإعدادات</h2>", unsafe_allow_html=True)
+    
+    symbols_map = {
+        "EUR/USD": "EURUSD=X", "GBP/USD": "GBPUSD=X", "USD/JPY": "USDJPY=X",
+        "AUD/USD": "AUDUSD=X", "USD/CAD": "USDCAD=X", "EUR/GBP": "EURGBP=X",
+        "XAU/USD (الذهب)": "GC=F", "BTC/USD (بيتكوين)": "BTC-USD"
+    }
+    selected_symbol_name = st.selectbox("اختر الزوج", list(symbols_map.keys()))
+    yf_symbol = symbols_map[selected_symbol_name]
 
-symbols_map = {
-    "EUR/USD": "EURUSD=X", "GBP/USD": "GBPUSD=X", "USD/JPY": "USDJPY=X",
-    "AUD/USD": "AUDUSD=X", "USD/CAD": "USDCAD=X", "EUR/GBP": "EURGBP=X",
-    "XAU/USD (الذهب)": "GC=F", "BTC/USD (بيتكوين)": "BTC-USD"
-}
-selected_symbol_name = st.sidebar.selectbox("اختر زوج العملات", list(symbols_map.keys()))
-yf_symbol = symbols_map[selected_symbol_name]
+    timeframes = {"1 دقيقة": "1m", "3 دقائق": "3m", "5 دقائق": "5m", "15 دقيقة": "15m"}
+    selected_tf_name = st.radio("الفريم الزمني", list(timeframes.keys()))
+    selected_tf = timeframes[selected_tf_name]
 
-timeframes = {"1 دقيقة": "1m", "3 دقائق": "3m", "5 دقائق": "5m", "15 دقيقة": "15m"}
-selected_tf_name = st.sidebar.radio("اختر الفريم الزمني", list(timeframes.keys()))
-selected_tf = timeframes[selected_tf_name]
+    st.markdown("---")
+    search_button = st.button("🔍 بحث عن صفقة")
 
-st.sidebar.markdown("---")
-search_button = st.sidebar.button("🔍 بحث عن صفقة")
-
-# --- 3. الدوال الأساسية ---
-
+# --- 3. الدوال الأساسية (نفس المنطق الذي يعمل بنجاح) ---
 @st.cache_data(ttl=30)
 def fetch_candles(symbol, tf):
     period = "7d" if tf in ["1m", "3m"] else "60d"
@@ -101,92 +146,42 @@ def fetch_candles(symbol, tf):
 
         df['time'] = pd.to_datetime(df['time']).dt.tz_localize(None)
         return df.tail(1000)
-    except Exception as e:
+    except Exception:
         return None
 
 def generate_advanced_signal(df, symbol):
-    """نظام إشارات محسن (حساس أكثر ويعطي صفقات)"""
     if df is None or len(df) < 50:
         return "NEUTRAL", "بيانات غير كافية", 0
-
     try:
         window = MarketDataWindow.from_arrays(
             symbol=symbol, open_=df['open'].values, high=df['high'].values,
             low=df['low'].values, close=df['close'].values, volume=df['volume'].values,
         )
-        
-        # 1. جعل المؤشرات أسرع وأكثر حساسية
         ma_cross = MACrossover(fast_period=5, slow_period=13) 
         rsi_reversion = RSIMeanReversion(period=14, oversold=40, overbought=60) 
         
         aggregator = SignalAggregator([ma_cross, rsi_reversion])
         bundle = aggregator.generate(window)
 
-        # 2. إذا أعطت المؤشرات إشارة، نعتمدها فوراً
         if bundle and bundle.signals:
             strongest = max(bundle.signals, key=lambda s: s.strength)
             is_bullish = "bullish" in str(strongest.direction).lower() or "long" in str(strongest.direction).lower()
-            
-            direction = "CALL (صعود)" if is_bullish else "PUT (هبوط)"
-            confidence = min(int((strongest.strength + 0.3) * 100), 95) # رفع نسبة الثقة
-            return direction, f"إشارة قوية من ({strongest.source})", confidence
-            
-        # 3. خطة بديلة (إذا كانت المؤشرات صامتة، نستخدم المتوسطات السريعة لضمان وجود إشارة)
+            direction = "CALL" if is_bullish else "PUT"
+            confidence = min(int((strongest.strength + 0.3) * 100), 95)
+            return direction, f"إشارة من ({strongest.source})", confidence
         else:
             close_prices = df['close']
             ema_5 = close_prices.ewm(span=5, adjust=False).mean()
             ema_13 = close_prices.ewm(span=13, adjust=False).mean()
-            
             if ema_5.iloc[-1] > ema_13.iloc[-1]:
-                return "CALL (صعود)", "تحليل الاتجاه السريع (صاعد)", 60
+                return "CALL", "اتجاه سريع (صاعد)", 60
             else:
-                return "PUT (هبوط)", "تحليل الاتجاه السريع (هابط)", 60
-                
-    except Exception as e:
-        return "NEUTRAL", f"خطأ في التحليل: {e}", 0
-
-    try:
-        window = MarketDataWindow.from_arrays(
-            symbol=symbol, open_=df['open'].values, high=df['high'].values,
-            low=df['low'].values, close=df['close'].values, volume=df['volume'].values,
-        )
-        
-        # دمج 3 استراتيجيات مختلفة
-        ma_cross = MACrossover(fast_period=9, slow_period=21) # سريع للفريمات الصغيرة
-        rsi_reversion = RSIMeanReversion(period=14, oversold=30, overbought=70)
-        
-        aggregator = SignalAggregator([ma_cross, rsi_reversion])
-        bundle = aggregator.generate(window)
-
-        # خوارزمية لزيادة الثقة (Trend + Momentum)
-        close_prices = df['close']
-        ema_50 = close_prices.ewm(span=50, adjust=False).mean()
-        trend = "UP" if close_prices.iloc[-1] > ema_50.iloc[-1] else "DOWN"
-
-        if bundle and bundle.signals:
-            strongest = max(bundle.signals, key=lambda s: s.strength)
-            
-            # دمج الاتجاه العام مع الإشارة
-            is_bullish = "bullish" in str(strongest.direction).lower() or "long" in str(strongest.direction).lower()
-            
-            if is_bullish and trend == "UP":
-                direction = "CALL (صعود)"
-                confidence = min(int((strongest.strength + 0.2) * 100), 99) # مكافأة ثقة للتوافق
-            elif not is_bullish and trend == "DOWN":
-                direction = "PUT (هبوط)"
-                confidence = min(int((strongest.strength + 0.2) * 100), 99)
-            else:
-                return "NEUTRAL", "تعارض بين المؤشرات والاتجاه العام", 0
-                
-            return direction, f"توافق المؤشرات ({strongest.source})", confidence
-        else:
-            return "NEUTRAL", "السوق متذبذب، انتظر فرصة أفضل", 0
-    except Exception as e:
+                return "PUT", "اتجاه سريع (هابط)", 60
+    except Exception:
         return "NEUTRAL", "خطأ في التحليل", 0
 
 def create_report_image(df_history):
-    """توليد تقرير فاخر باللونين الأسود والذهبي"""
-    fig, ax = plt.subplots(figsize=(10, 6), facecolor='#0E1117')
+    fig, ax = plt.subplots(figsize=(10, 5), facecolor='#0E1117')
     ax.axis('tight'); ax.axis('off')
     
     table_data = [df_history.columns.tolist()] + df_history.values.tolist()
@@ -196,9 +191,9 @@ def create_report_image(df_history):
     table.scale(1, 2)
     
     for (row, col), cell in table.get_celld().items():
-        cell.set_edgecolor('#FFD700')
+        cell.set_edgecolor('#333')
         if row == 0:
-            cell.set_facecolor('#B8860B') # رأس الجدول ذهبي غامق
+            cell.set_facecolor('#B8860B')
             cell.set_text_props(color='white', weight='bold')
         else:
             cell.set_facecolor('#1A1F2B')
@@ -213,45 +208,43 @@ def create_report_image(df_history):
 
 # --- 4. الواجهة الرئيسية ---
 st.markdown('<h1 class="main-header">🕯️ The Candle Bot</h1>', unsafe_allow_html=True)
-st.markdown("<p style='text-align: center; color: #A0AAB5; font-size: 1.2rem;'>منصة الإشارات الذكية - تحليل متعدد المؤشرات</p>", unsafe_allow_html=True)
+st.markdown('<p class="sub-header">منصة الإشارات الذكية - النسخة الاحترافية</p>', unsafe_allow_html=True)
 
 if search_button:
     play_sound()
     
-    # أنميشن تحميل متطور
-    placeholder = st.empty()
-    with placeholder.container():
-        st.markdown("<h3 style='text-align: center; color: #FFD700;'>جاري تحليل السوق واستخراج الإشارة...</h3>", unsafe_allow_html=True)
-        progress_bar = st.progress(0)
-        for i in range(100):
-            time.sleep(0.01)
-            progress_bar.progress(i + 1)
-    
-    df = fetch_candles(yf_symbol, selected_tf)
-    placeholder.empty()
+    with st.spinner("جاري تحليل السوق..."):
+        df = fetch_candles(yf_symbol, selected_tf)
     
     if df is not None:
         signal, reason, confidence = generate_advanced_signal(df, yf_symbol)
         
-        # عرض الإشارة بتصميم ضخم
+        # عرض الإشارة
         if "CALL" in signal:
-            st.markdown(f'<div class="signal-box signal-call">🚀 {signal} <br><span style="font-size: 1.5rem;">ثقة {confidence}%</span></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="signal-box signal-call">🚀 CALL<br><span style="font-size: 1.2rem; color: #fff;">ثقة {confidence}%</span></div>', unsafe_allow_html=True)
         elif "PUT" in signal:
-            st.markdown(f'<div class="signal-box signal-put">🔻 {signal} <br><span style="font-size: 1.5rem;">ثقة {confidence}%</span></div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="signal-box signal-put">🔻 PUT<br><span style="font-size: 1.2rem; color: #fff;">ثقة {confidence}%</span></div>', unsafe_allow_html=True)
         else:
-            st.markdown(f'<div class="signal-box signal-neutral">⚖️ {signal}</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="signal-box signal-neutral">⚖️ NEUTRAL</div>', unsafe_allow_html=True)
         
-        st.info(f"📝 **التحليل:** {reason}")
+        # تفاصيل التحليل
+        st.markdown(f"""
+        <div class="stat-card">
+            <h4 style="color: #A0AAB5; margin: 0;">التحليل الفني</h4>
+            <p style="color: #fff; font-size: 1.1rem; margin: 5px 0;">{reason}</p>
+        </div>
+        """, unsafe_allow_html=True)
         
-        # رسم بياني احترافي للشموع اليابانية (Plotly)
-        st.markdown("### 📊 الرسم البياني الفني")
+        # الرسم البياني
+        st.markdown("<h4 style='color: #FFD700;'>📊 حركة السعر</h4>", unsafe_allow_html=True)
         fig = go.Figure(data=[go.Candlestick(
             x=df['time'], open=df['open'], high=df['high'], low=df['low'], close=df['close'],
             increasing_line_color='#38ef7d', decreasing_line_color='#ef473a'
         )])
         fig.update_layout(
-            template='plotly_dark', plot_bgcolor='#0E1117', paper_bgcolor='#0E1117',
-            xaxis_rangeslider_visible=False, height=400, margin=dict(l=10, r=10, t=10, b=10)
+            template='plotly_dark', plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
+            xaxis_rangeslider_visible=False, height=350, margin=dict(l=0, r=0, t=10, b=0),
+            xaxis=dict(showgrid=False), yaxis=dict(showgrid=True, gridcolor='rgba(255,255,255,0.05)')
         )
         st.plotly_chart(fig, use_container_width=True)
         
@@ -261,28 +254,40 @@ if search_button:
         if "NEUTRAL" not in signal:
             st.session_state.trade_history.append({
                 "الزوج": selected_symbol_name, "الفريم": selected_tf_name,
-                "الإشارة": "CALL" if "CALL" in signal else "PUT",
-                "الثقة": f"{confidence}%", "الوقت": pd.Timestamp.now().strftime("%H:%M")
+                "الإشارة": signal, "الثقة": f"{confidence}%", "الوقت": pd.Timestamp.now().strftime("%H:%M")
             })
 
-# --- 5. السجل والتقرير ---
-st.sidebar.markdown("---")
-st.sidebar.markdown("<h3 style='color: #FFD700;'>📈 الإحصائيات</h3>", unsafe_allow_html=True)
+# --- 5. السجل والإحصائيات (في الشريط الجانبي) ---
+with st.sidebar:
+    st.markdown("---")
+    st.markdown("<h3 style='color: #FFD700; font-family: Cairo;'>📈 السجل</h3>", unsafe_allow_html=True)
 
-if 'trade_history' in st.session_state and st.session_state.trade_history:
-    df_history = pd.DataFrame(st.session_state.trade_history)
-    
-    total = len(df_history)
-    calls = len(df_history[df_history['الإشارة'] == 'CALL'])
-    puts = len(df_history[df_history['الإشارة'] == 'PUT'])
-    
-    st.sidebar.metric("إجمالي الصفقات", total)
-    col1, col2 = st.sidebar.columns(2)
-    col1.metric("CALL 📈", calls)
-    col2.metric("PUT 📉", puts)
-    
-    if st.sidebar.button("📸 تحميل التقرير كصورة", use_container_width=True):
-        img_buf = create_report_image(df_history.tail(10))
-        st.sidebar.download_button("⬇️ اضغط للتحميل", data=img_buf, file_name="Candle_Report.png", mime="image/png")
-else:
-    st.sidebar.info("لا توجد صفقات مسجلة. ابدأ البحث الآن!")
+    if 'trade_history' in st.session_state and st.session_state.trade_history:
+        df_history = pd.DataFrame(st.session_state.trade_history)
+        
+        total = len(df_history)
+        calls = len(df_history[df_history['الإشارة'] == 'CALL'])
+        puts = len(df_history[df_history['الإشارة'] == 'PUT'])
+        
+        st.markdown(f"""
+        <div class="stat-card">
+            <p style="margin: 0; color: #A0AAB5;">إجمالي الصفقات</p>
+            <h2 style="margin: 0; color: #fff;">{total}</h2>
+        </div>
+        <div style="display: flex; gap: 10px;">
+            <div class="stat-card" style="flex: 1; border-bottom: 3px solid #38ef7d;">
+                <p style="margin: 0; color: #A0AAB5;">CALL</p>
+                <h3 style="margin: 0; color: #38ef7d;">{calls}</h3>
+            </div>
+            <div class="stat-card" style="flex: 1; border-bottom: 3px solid #ef473a;">
+                <p style="margin: 0; color: #A0AAB5;">PUT</p>
+                <h3 style="margin: 0; color: #ef473a;">{puts}</h3>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        if st.button("📸 تحميل التقرير كصورة", use_container_width=True):
+            img_buf = create_report_image(df_history.tail(8))
+            st.download_button("⬇️ اضغط هنا للحفظ", data=img_buf, file_name="Candle_Report.png", mime="image/png", use_container_width=True)
+    else:
+        st.info("لا توجد إشارات مسجلة حتى الآن.")
