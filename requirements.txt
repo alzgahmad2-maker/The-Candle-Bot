@@ -1,0 +1,6 @@
+streamlit
+pandas
+numpy
+otcharts
+pyalbedo
+html2image
