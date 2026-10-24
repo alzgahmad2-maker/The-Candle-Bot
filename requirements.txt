@@ -5,3 +5,4 @@ yfinance
 pyalbedo
 matplotlib
 plotly
+otcharts
