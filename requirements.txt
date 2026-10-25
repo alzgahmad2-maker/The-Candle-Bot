@@ -1,10 +1,9 @@
 streamlit
 pandas
 numpy
-plotly
+plotly>=6.1.1
 requests
-python-telegram-bot
 streamlit-js-eval
 pocketoptionapi-async
-websockets==11.0
-
+websockets==11.0.3
+kaleido>=1.0.0
