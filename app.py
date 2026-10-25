@@ -91,7 +91,7 @@ st.markdown('<div class="sub-header">AUTO-REFRESH • RSI/MACD • SIGNAL LOG �
 # 2. بيانات الاعتماد (يجب تعديلها)
 # ============================================================
 # ⚠️ ضع الـ SSID الجديد هنا (السلسلة الكاملة التي تبدأ بـ 42["auth")
-SSID = '42["auth",{"session":"f4sc12daa4i61fsvii92r71sv4","isDemo":1,"uid":138770488,"platform":2,"isFastHistory":true,"isOptimized":true}]'
+SSID = '42["auth",{"session":"bchtvth5m3bmdovlva3i5t59nq","isDemo":1,"uid":136934681,"platform":2,"isFastHistory":true,"isOptimized":true}]'
 
 # ⚠️ ضع بيانات تيليجرام هنا (إذا كنت تريد الإشعارات)
 TELEGRAM_TOKEN = "ضع_التوكن_هنا"
