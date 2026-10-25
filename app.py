@@ -1,14 +1,10 @@
 # ============================================================
-# ⚠️ يجب أن تكون هذه الأسطر في أعلى الملف قبل أي استيراد
+# توجيه المسارات القابلة للكتابة (احتياطي)
 # ============================================================
 import os
-
 os.environ['HOME'] = '/tmp'
-os.environ['XDG_CONFIG_HOME'] = '/tmp/.config'
-os.environ['XDG_CACHE_HOME'] = '/tmp/.cache'
-
-for _p in ['/tmp/.config', '/tmp/.cache', '/tmp/.local', '/tmp/.local/share']:
-    os.makedirs(_p, exist_ok=True)
+os.makedirs('/tmp/.config', exist_ok=True)
+os.makedirs('/tmp/.cache', exist_ok=True)
 
 # ============================================================
 # استيرادات المكتبات
@@ -19,10 +15,11 @@ import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import time
+import asyncio
 import requests
 from datetime import datetime, timedelta
 from streamlit_js_eval import streamlit_js_eval
-from pocketoptionapi.stable_api import PocketOption
+from pocketoptionapi_async import AsyncPocketOptionClient
 
 # ============================================================
 # 1. إعدادات الصفحة والتصميم
@@ -58,8 +55,6 @@ st.markdown('<div class="sub-header">20 PAIRS • COUNTDOWN • WIN RATE • AUD
 SSID = '42["auth",{"session":"bchtvth5m3bmdovlva3i5t59nq","isDemo":1,"uid":136934681,"platform":2,"isFastHistory":true,"isOptimized":true}]'
 TELEGRAM_TOKEN = "8531787721:AAH6dmi42q9BGw7rsdJYW7Ux3gfJj7iZ51E"
 TELEGRAM_CHAT_ID = "8758991455"
-
-# ✅ مسار قابل للكتابة على Streamlit Cloud
 CSV_FILE = "/tmp/paper_trading_log.csv"
 
 PAIRS = [
@@ -122,55 +117,49 @@ def send_telegram_alert(message):
     except Exception:
         pass
 
-def get_otc_data(symbol, period, max_candles):
-    """
-    جلب البيانات عبر PocketOptionAPI (متزامنة) مع إدارة آمنة للأخطاء.
-    """
-    api = None
+# ============================================================
+# 5. جلب البيانات (غير متزامن)
+# ============================================================
+async def _fetch_candles(symbol, period, count):
+    client = AsyncPocketOptionClient(SSID, is_demo=True, enable_logging=False)
+    await client.connect()
     try:
-        api = PocketOption(SSID, demo=True)
-        connected = api.connect()
-        if not connected:
-            st.error("فشل الاتصال بـ PocketOption. تأكد من صلاحية SSID.")
+        candles = await client.get_candles(asset=symbol, timeframe=period, count=count)
+    finally:
+        await client.disconnect()
+    return candles
+
+def get_otc_data(symbol, period, max_candles):
+    try:
+        candles = asyncio.run(_fetch_candles(symbol, period, max_candles))
+        if not candles:
+            st.error("لم تُرجع المكتبة أي شموع. تحقق من الزوج أو الإطار الزمني.")
             return None
 
-        time.sleep(2)
+        rows = []
+        for c in candles:
+            rows.append({
+                "time": getattr(c, "timestamp", None) or getattr(c, "time", None),
+                "open": c.open,
+                "high": c.high,
+                "low": c.low,
+                "close": c.close,
+            })
 
-        end_time = int(datetime.now().timestamp())
-        start_time = end_time - (max_candles * period)
-
-        df = api.get_history(
-            symbol,
-            period,
-            start_time=start_time,
-            end_time=end_time
-        )
-
-        if df is None or df.empty:
-            st.error("لم تُرجع المكتبة أي شموع. تحقق من الزوج/الإطار.")
+        df = pd.DataFrame(rows)
+        if df.empty:
             return None
 
-        df = df.copy()
-        if 'time' in df.columns:
-            df['time'] = pd.to_datetime(df['time'], unit='s', errors='coerce')
-            if df['time'].isna().all():
-                df['time'] = pd.to_datetime(df['time'], errors='coerce')
-
-        df = df.sort_values('time').tail(max_candles).reset_index(drop=True)
+        df["time"] = pd.to_datetime(df["time"], unit="s", errors="coerce")
+        df = df.dropna(subset=["time"]).sort_values("time").tail(max_candles).reset_index(drop=True)
         return df
 
     except Exception as e:
         st.error(f"خطأ في الاتصال أو جلب البيانات: {e}")
         return None
-    finally:
-        if api is not None:
-            try:
-                api.disconnect()
-            except Exception:
-                pass
 
 # ============================================================
-# 5. المؤشرات الفنية
+# 6. المؤشرات الفنية
 # ============================================================
 def calculate_indicators(df):
     delta = df['close'].diff()
@@ -189,7 +178,7 @@ def calculate_indicators(df):
     return df
 
 # ============================================================
-# 6. كشف الأنماط
+# 7. كشف الأنماط
 # ============================================================
 def detect_patterns(df):
     patterns = []
@@ -225,7 +214,7 @@ def detect_patterns(df):
     return patterns
 
 # ============================================================
-# 7. الرسم البياني
+# 8. الرسم البياني
 # ============================================================
 def plot_chart(df, patterns, symbol):
     fig = make_subplots(
@@ -274,7 +263,7 @@ def plot_chart(df, patterns, symbol):
     return fig
 
 # ============================================================
-# 8. منطق الإشارة
+# 9. منطق الإشارة
 # ============================================================
 def generate_signal(patterns, df):
     buys = sum(1 for _, _, s in patterns if s == "buy")
@@ -296,7 +285,7 @@ def generate_signal(patterns, df):
     return "NEUTRAL", buys, sells, "لا توجد إشارة"
 
 # ============================================================
-# 9. سجل الصفقات والتقييم
+# 10. سجل الصفقات والتقييم
 # ============================================================
 def log_trade(symbol, signal, entry_price, timeframe):
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -332,7 +321,7 @@ def evaluate_trades(current_price, current_symbol):
         df.to_csv(CSV_FILE, index=False)
 
 # ============================================================
-# 10. العرض الرئيسي
+# 11. العرض الرئيسي
 # ============================================================
 if st.session_state.get('run_scan') or enable_auto_refresh:
     df = get_otc_data(symbol, period, max_candles)
