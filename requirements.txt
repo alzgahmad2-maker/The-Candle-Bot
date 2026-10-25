@@ -7,4 +7,4 @@ python-telegram-bot
 streamlit-js-eval
 pocketoptionapi-async
 websockets==11.0
-kaleido
+
