@@ -50,7 +50,7 @@ st.markdown('<div class="sub-header">ULTIMATE TRADING SYSTEM • 20 PAIRS • MU
 # ============================================================
 # 2. بيانات الاعتماد والإعدادات
 # ============================================================
-SSID = '42["auth",{"sessionToken":"0c16e28f5e07c2250afb2df5e06b1d78","uid":"136934681","lang":"en","currentUrl":"cabinet/demo-quick-high-low","isChart":1}]'
+SSID = '42["auth",{"session":"bchtvth5m3bmdovlva3i5t59nq","isDemo":1,"uid":136934681,"platform":2,"isFastHistory":true,"isOptimized":true}]'
 TELEGRAM_TOKEN = "8531787721:AAH6dmi42q9BGw7rsdJYW7Ux3gfJj7iZ51E"
 TELEGRAM_CHAT_ID = "8758991455"
 CSV_FILE = "elzogheir_vip_log.csv"
