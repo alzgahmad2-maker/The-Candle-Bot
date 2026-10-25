@@ -1,5 +1,6 @@
 websockets==11.0
 streamlit
+kaleido
 pandas
 numpy
 plotly
@@ -7,4 +8,3 @@ requests
 python-telegram-bot
 streamlit-js-eval
 pocketoptionapi-async
-kaleido
