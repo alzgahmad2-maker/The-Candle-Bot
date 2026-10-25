@@ -2,9 +2,8 @@ streamlit
 pandas
 numpy
 plotly>=6.1.1
+kaleido>=1.0.0
 requests
 streamlit-js-eval
-pocketoptionapi-async
 websockets==11.0.3
-kaleido>=1.0.0
 git+https://github.com/Mastaaa1987/PocketOptionAPI-v2.git
