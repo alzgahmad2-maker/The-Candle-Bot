@@ -1,7 +1,6 @@
 streamlit
 pandas
 numpy
-kaleido>=1.0.0
 requests
 streamlit-js-eval
 websockets==11.0.3
