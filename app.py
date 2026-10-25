@@ -1,3 +1,18 @@
+# ============================================================
+# ⚠️ يجب أن تكون هذه الأسطر في أعلى الملف قبل أي استيراد
+# ============================================================
+import os
+
+os.environ['HOME'] = '/tmp'
+os.environ['XDG_CONFIG_HOME'] = '/tmp/.config'
+os.environ['XDG_CACHE_HOME'] = '/tmp/.cache'
+
+for _p in ['/tmp/.config', '/tmp/.cache', '/tmp/.local', '/tmp/.local/share']:
+    os.makedirs(_p, exist_ok=True)
+
+# ============================================================
+# استيرادات المكتبات
+# ============================================================
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -5,13 +20,12 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import time
 import requests
-import os
 from datetime import datetime, timedelta
 from streamlit_js_eval import streamlit_js_eval
 from pocketoptionapi.stable_api import PocketOption
 
 # ============================================================
-# 1. إعدادات الصفحة والتصميم (CSS)
+# 1. إعدادات الصفحة والتصميم
 # ============================================================
 st.set_page_config(page_title="Candle Bot PRO 3.0", page_icon="🕯️", layout="wide")
 
@@ -44,7 +58,9 @@ st.markdown('<div class="sub-header">20 PAIRS • COUNTDOWN • WIN RATE • AUD
 SSID = '42["auth",{"session":"bchtvth5m3bmdovlva3i5t59nq","isDemo":1,"uid":136934681,"platform":2,"isFastHistory":true,"isOptimized":true}]'
 TELEGRAM_TOKEN = "8531787721:AAH6dmi42q9BGw7rsdJYW7Ux3gfJj7iZ51E"
 TELEGRAM_CHAT_ID = "8758991455"
-CSV_FILE = "paper_trading_log.csv"
+
+# ✅ مسار قابل للكتابة على Streamlit Cloud
+CSV_FILE = "/tmp/paper_trading_log.csv"
 
 PAIRS = [
     "EURUSD_otc", "GBPUSD_otc", "USDJPY_otc", "AUDUSD_otc", "USDCAD_otc",
@@ -65,7 +81,7 @@ with st.sidebar:
         format_func=lambda x: {15: "15 ثانية", 30: "30 ثانية", 60: "دقيقة واحدة", 180: "3 دقائق", 900: "15 دقيقة"}[x],
         index=2
     )
-    max_candles = 300  # رُفع من 200 لاستقرار EMA200
+    max_candles = 300
 
     st.markdown("---")
     st.markdown("### 🔔 الميزات")
@@ -87,12 +103,14 @@ with st.sidebar:
 # 4. دوال مساعدة
 # ============================================================
 def play_sound():
-    """يشغّل صوتًا عبر JavaScript مع مفتاح فريد لتجنب تجاهل Streamlit."""
     if enable_sound:
-        streamlit_js_eval(
-            js_expressions="new Audio('https://actions.google.com/sounds/v1/alarms/beep_short.ogg').play()",
-            key=f"sound_alert_{time.time()}"
-        )
+        try:
+            streamlit_js_eval(
+                js_expressions="new Audio('https://actions.google.com/sounds/v1/alarms/beep_short.ogg').play()",
+                key=f"sound_alert_{time.time()}"
+            )
+        except Exception:
+            pass
 
 def send_telegram_alert(message):
     if not enable_telegram or TELEGRAM_TOKEN == "ضع_التوكن_هنا":
@@ -106,24 +124,19 @@ def send_telegram_alert(message):
 
 def get_otc_data(symbol, period, max_candles):
     """
-    نسخة متزامنة تعتمد على PocketOption من PocketOptionAPI-v2.
-    تُرجع DataFrame بأعمدة time/open/high/low/close.
+    جلب البيانات عبر PocketOptionAPI (متزامنة) مع إدارة آمنة للأخطاء.
     """
     api = None
     try:
-        # التوقيع المستخدم في المكتبة: PocketOption(ssid, demo)
         api = PocketOption(SSID, demo=True)
         connected = api.connect()
         if not connected:
             st.error("فشل الاتصال بـ PocketOption. تأكد من صلاحية SSID.")
             return None
 
-        # انتظار قصير حتى تُهيأ الجلسة وتُحمّل الأزواج
         time.sleep(2)
 
-        # جلب البيانات التاريخية باستخدام get_history
         end_time = int(datetime.now().timestamp())
-        # عدد الثواني المطلوبة بناءً على عدد الشموع والإطار الزمني
         start_time = end_time - (max_candles * period)
 
         df = api.get_history(
@@ -134,18 +147,15 @@ def get_otc_data(symbol, period, max_candles):
         )
 
         if df is None or df.empty:
-            st.error("لم تُرجع المكتبة أي شموع. قد يكون الزوج غير مدعوم أو الإطار الزمني غير متاح.")
+            st.error("لم تُرجع المكتبة أي شموع. تحقق من الزوج/الإطار.")
             return None
 
-        # التأكد من وجود الأعمدة المطلوبة
         df = df.copy()
-        # المكتبة غالبًا تُرجع time كـ timestamp؛ نحوله إلى datetime
         if 'time' in df.columns:
             df['time'] = pd.to_datetime(df['time'], unit='s', errors='coerce')
             if df['time'].isna().all():
                 df['time'] = pd.to_datetime(df['time'], errors='coerce')
 
-        # ترتيب حسب الوقت وأخذ آخر max_candles شمعة
         df = df.sort_values('time').tail(max_candles).reset_index(drop=True)
         return df
 
@@ -153,7 +163,6 @@ def get_otc_data(symbol, period, max_candles):
         st.error(f"خطأ في الاتصال أو جلب البيانات: {e}")
         return None
     finally:
-        # محاولة إغلاق الاتصال بأمان
         if api is not None:
             try:
                 api.disconnect()
@@ -302,10 +311,6 @@ def log_trade(symbol, signal, entry_price, timeframe):
         new_data.to_csv(CSV_FILE, mode='w', header=True, index=False)
 
 def evaluate_trades(current_price, current_symbol):
-    """
-    يُقيّم الصفقات المعلقة للزوج الحالي فقط.
-    ملاحظة: الصفقات المعلقة لأزواج أخرى تبقى PENDING حتى يتم فتح ذلك الزوج.
-    """
     if not os.path.exists(CSV_FILE):
         return
     df = pd.read_csv(CSV_FILE)
@@ -341,7 +346,6 @@ if st.session_state.get('run_scan') or enable_auto_refresh:
         evaluate_trades(current_price, symbol)
 
         last_signal = st.session_state.get('last_signal', None)
-        # نسمح بإشارة جديدة فقط إذا اختلفت عن السابقة أو انتهت الصفقة السابقة
         trade_expired = st.session_state.get('trade_opened_time') is None
         if signal in ["STRONG BUY", "STRONG SELL"] and (signal != last_signal or trade_expired):
             if enable_telegram:
@@ -359,7 +363,6 @@ if st.session_state.get('run_scan') or enable_auto_refresh:
             st.session_state['trade_opened_time'] = time.time()
             st.session_state['trade_signal'] = signal
 
-        # بطاقات الإحصائيات
         c1, c2, c3, c4 = st.columns(4)
         with c1:
             st.markdown(
@@ -415,7 +418,6 @@ if st.session_state.get('run_scan') or enable_auto_refresh:
         </div>
         """, unsafe_allow_html=True)
 
-        # العداد التنازلي
         if st.session_state.get('trade_opened_time') and signal in ["STRONG BUY", "STRONG SELL"]:
             elapsed = time.time() - st.session_state['trade_opened_time']
             remaining = int(period - elapsed)
