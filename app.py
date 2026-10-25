@@ -92,10 +92,8 @@ st.markdown('<div class="sub-header">AUTO-REFRESH • RSI/MACD • SIGNAL LOG �
 # ============================================================
 # ⚠️ ضع الـ SSID الجديد هنا (السلسلة الكاملة التي تبدأ بـ 42["auth")
 SSID = '42["auth",{"session":"bchtvth5m3bmdovlva3i5t59nq","isDemo":1,"uid":136934681,"platform":2,"isFastHistory":true,"isOptimized":true}]'
-
-# ⚠️ ضع بيانات تيليجرام هنا (إذا كنت تريد الإشعارات)
-TELEGRAM_TOKEN = "ضع_التوكن_هنا"
-TELEGRAM_CHAT_ID = "ضع_الـ_Chat_ID_هنا"
+TELEGRAM_TOKEN = "8531787721:AAH6dmi42q9BGw7rsdJYW7Ux3gfJj7iZ51E"
+TELEGRAM_CHAT_ID = "8758991455"
 
 CSV_FILE = "signals_log.csv"
 
