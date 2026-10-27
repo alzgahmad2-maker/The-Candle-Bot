@@ -52,7 +52,7 @@ st.markdown('<div class="sub-header">ULTIMATE TRADING SYSTEM • 20 PAIRS • MU
 # تم إزالة SSID القديم، أصبح الآن يستخدم OTCharts API Key
 # الطريقة الموصى بها: تعيين متغير البيئة OTCHARTS_API_KEY
 # أو قم بإلغاء التعليق عن السطر التالي واملأ مفتاحك (غير موصى به للأمان)
-# os.environ["OTCHARTS_API_KEY"] = "otc_live_cbb14cd28e7235495a2944f53435fc8583278c4a50adf515e0a732875db8798e"
+ os.environ["OTCHARTS_API_KEY"] = "otc_live_cbb14cd28e7235495a2944f53435fc8583278c4a50adf515e0a732875db8798e"
 
 TELEGRAM_TOKEN = "8531787721:AAH6dmi42q9BGw7rsdJYW7Ux3gfJj7iZ51E"
 TELEGRAM_CHAT_ID = "8758991455"
