@@ -1,8 +1,5 @@
 streamlit
 pandas
-numpy
 plotly
 requests
-streamlit-js-eval
 otcharts[pandas]
-kaleido==0.2.1
