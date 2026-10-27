@@ -49,10 +49,9 @@ st.markdown('<div class="sub-header">ULTIMATE TRADING SYSTEM • 20 PAIRS • MU
 # ============================================================
 # 2. بيانات الاعتماد والإعدادات
 # ============================================================
-# تم إزالة SSID القديم، أصبح الآن يستخدم OTCharts API Key
-# الطريقة الموصى بها: تعيين متغير البيئة OTCHARTS_API_KEY
-# أو قم بإلغاء التعليق عن السطر التالي واملأ مفتاحك (غير موصى به للأمان)
+# ⚠️ ضع مفتاح API الخاص بك هنا بين علامات التنصيص
 os.environ["OTCHARTS_API_KEY"] = "otc_live_cbb14cd28e7235495a2944f53435fc8583278c4a50adf515e0a732875db8798e"
+
 TELEGRAM_TOKEN = "8531787721:AAH6dmi42q9BGw7rsdJYW7Ux3gfJj7iZ51E"
 TELEGRAM_CHAT_ID = "8758991455"
 CSV_FILE = "elzogheir_vip_log.csv"
@@ -118,11 +117,8 @@ def send_telegram_alert(message):
 def get_otc_data(symbol, period, max_candles):
     """
     جلب بيانات OTC من OTCharts
-    symbol: مثل EURUSD_otc (متوافق مع دفتر otc في Pocket Option)
-    period: الإطار الزمني بالثواني
     """
     try:
-        # Client() يقرأ OTCHARTS_API_KEY من متغيرات البيئة تلقائياً
         otc = Client()
         # الدفتر "otc" هو Pocket Option، ورموز الأدوات بالصيغة EURUSD_otc
         bars = otc.candles("otc", symbol, tf=period, limit=max_candles)
@@ -133,7 +129,7 @@ def get_otc_data(symbol, period, max_candles):
         # تحويل إلى DataFrame
         df = bars.dataframe()
         
-        # توحيد أسماء الأعمدة (عادةً time, open, high, low, close)
+        # توحيد أسماء الأعمدة
         df['time'] = pd.to_datetime(df['time'], unit='s')
         
         # الاحتفاظ بالأعمدة المطلوبة فقط والتأكد من النوع float
