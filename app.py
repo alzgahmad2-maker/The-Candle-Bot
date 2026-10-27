@@ -116,31 +116,57 @@ def send_telegram_alert(message):
 
 def get_otc_data(symbol, period, max_candles):
     """
-    جلب بيانات OTC من OTCharts باستخدام دالة dataframe المدمجة
+    جلب بيانات OTC من OTCharts مع معالجة مرنة لأسماء الأعمدة
     """
     try:
         otc = Client()
-        # استخدام dataframe مباشرة بدلاً من candles
         df = otc.dataframe("otc", symbol, tf=period, limit=max_candles)
         
         if df is None or df.empty:
             return None
-            
-        # التأكد من وجود عمود الوقت وتحويله
-        if 'time' in df.columns:
-            df['time'] = pd.to_datetime(df['time'], unit='s')
-        elif 'timestamp' in df.columns:
-            df['time'] = pd.to_datetime(df['timestamp'], unit='s')
-            
-        # الاحتفاظ بالأعمدة المطلوبة فقط والتأكد من النوع float
-        cols_to_keep = ['time', 'open', 'high', 'low', 'close']
-        df = df[[c for c in cols_to_keep if c in df.columns]].copy()
         
-        for col in ['open', 'high', 'low', 'close']:
-            if col in df.columns:
-                df[col] = df[col].astype(float)
-                
+        # --- معالجة العمود الزمني ---
+        time_col = None
+        for candidate in ['time', 'timestamp', 'date', 'datetime']:
+            if candidate in df.columns:
+                time_col = candidate
+                break
+        
+        if time_col is not None:
+            # تحويل الطابع الزمني (Unix) إلى datetime
+            if pd.api.types.is_numeric_dtype(df[time_col]):
+                df['time'] = pd.to_datetime(df[time_col], unit='s')
+            else:
+                df['time'] = pd.to_datetime(df[time_col])
+        else:
+            # إذا لم يوجد عمود زمني، استخدم الفهرس كوقت (حل احتياطي)
+            st.warning("لم يتم العثور على عمود زمني في البيانات، سيتم استخدام ترتيب الشموع.")
+            df['time'] = pd.date_range(end=datetime.now(), periods=len(df), freq=f'{period}s')
+        
+        # --- التأكد من وجود أعمدة OHLC ---
+        required = ['open', 'high', 'low', 'close']
+        for col in required:
+            if col not in df.columns:
+                # محاولة البحث بأسماء بديلة (نادرة)
+                alt = [c for c in df.columns if c.lower() == col]
+                if alt:
+                    df[col] = df[alt[0]]
+                else:
+                    st.error(f"العمود '{col}' مفقود من البيانات. الأعمدة المتاحة: {list(df.columns)}")
+                    return None
+            df[col] = pd.to_numeric(df[col], errors='coerce')
+        
+        # إزالة الصفوف التي تحتوي على NaN في OHLC
+        df = df.dropna(subset=required)
+        
+        if df.empty:
+            return None
+        
+        # الاحتفاظ بالأعمدة المطلوبة فقط
+        df = df[['time'] + required].copy()
+        
         return df.tail(max_candles).reset_index(drop=True)
+        
     except Exception as e:
         st.error(f"فشل جلب البيانات من OTCharts: {e}")
         return None
