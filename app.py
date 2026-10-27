@@ -4,12 +4,11 @@ import numpy as np
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import time
-import asyncio
 import requests
 import os
 from datetime import datetime, timedelta
 from streamlit_js_eval import streamlit_js_eval
-from pocketoptionapi_async import AsyncPocketOptionClient
+from otcharts import Client
 from io import BytesIO
 
 # ============================================================
@@ -50,11 +49,16 @@ st.markdown('<div class="sub-header">ULTIMATE TRADING SYSTEM • 20 PAIRS • MU
 # ============================================================
 # 2. بيانات الاعتماد والإعدادات
 # ============================================================
-SSID = '42["auth",{"session":"f4sc12daa4i61fsvii92r71sv4","isDemo":1,"uid":138770488,"platform":2,"isFastHistory":true,"isOptimized":true}]'
+# تم إزالة SSID القديم، أصبح الآن يستخدم OTCharts API Key
+# الطريقة الموصى بها: تعيين متغير البيئة OTCHARTS_API_KEY
+# أو قم بإلغاء التعليق عن السطر التالي واملأ مفتاحك (غير موصى به للأمان)
+# os.environ["OTCHARTS_API_KEY"] = "otc_live_cbb14cd28e7235495a2944f53435fc8583278c4a50adf515e0a732875db8798e"
+
 TELEGRAM_TOKEN = "8531787721:AAH6dmi42q9BGw7rsdJYW7Ux3gfJj7iZ51E"
 TELEGRAM_CHAT_ID = "8758991455"
 CSV_FILE = "elzogheir_vip_log.csv"
 
+# دفتر Pocket Option في OTCharts يُسمى "otc"، ورموز الأدوات بالصيغة xxx_otc
 PAIRS = [
     "EURUSD_otc", "GBPUSD_otc", "USDJPY_otc", "AUDUSD_otc", "USDCAD_otc",
     "USDCHF_otc", "NZDUSD_otc", "EURGBP_otc", "EURJPY_otc", "GBPJPY_otc",
@@ -112,22 +116,35 @@ def send_telegram_alert(message):
     try: requests.post(url, json=payload, timeout=5)
     except: pass
 
-async def fetch_data_async(symbol, period, max_candles):
-    client = AsyncPocketOptionClient(SSID, is_demo=True)
-    await client.connect()
-    candles = await client.get_candles(asset=symbol, timeframe=period, count=max_candles)
-    await client.disconnect()
-    return candles
-
 def get_otc_data(symbol, period, max_candles):
+    """
+    جلب بيانات OTC من OTCharts
+    symbol: مثل EURUSD_otc (متوافق مع دفتر otc في Pocket Option)
+    period: الإطار الزمني بالثواني
+    """
     try:
-        candles = asyncio.run(fetch_data_async(symbol, period, max_candles))
-        if not candles: return None
-        data = [{'time': c.timestamp, 'open': c.open, 'high': c.high, 'low': c.low, 'close': c.close} for c in candles]
-        df = pd.DataFrame(data)
+        # Client() يقرأ OTCHARTS_API_KEY من متغيرات البيئة تلقائياً
+        otc = Client()
+        # الدفتر "otc" هو Pocket Option، ورموز الأدوات بالصيغة EURUSD_otc
+        bars = otc.candles("otc", symbol, tf=period, limit=max_candles)
+        
+        if not bars:
+            return None
+            
+        # تحويل إلى DataFrame
+        df = bars.dataframe()
+        
+        # توحيد أسماء الأعمدة (عادةً time, open, high, low, close)
         df['time'] = pd.to_datetime(df['time'], unit='s')
+        
+        # الاحتفاظ بالأعمدة المطلوبة فقط والتأكد من النوع float
+        df = df[['time', 'open', 'high', 'low', 'close']].copy()
+        for col in ['open', 'high', 'low', 'close']:
+            df[col] = df[col].astype(float)
+            
         return df.tail(max_candles).reset_index(drop=True)
     except Exception as e:
+        st.error(f"فشل جلب البيانات من OTCharts: {e}")
         return None
 
 # ============================================================
