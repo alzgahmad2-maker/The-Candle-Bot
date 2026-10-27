@@ -49,8 +49,8 @@ st.markdown('<div class="sub-header">ULTIMATE TRADING SYSTEM • 20 PAIRS • MU
 # ============================================================
 # 2. بيانات الاعتماد والإعدادات
 # ============================================================
-# استخدام دالة dataframe المخصصة مباشرة
-df = otc.dataframe("otc_live_cbb14cd28e7235495a2944f53435fc8583278c4a50adf515e0a732875db8798e", symbol, tf=period, limit=max_candles)"
+# ⚠️ ضع مفتاح API الخاص بك هنا بين علامات التنصيص
+os.environ["OTCHARTS_API_KEY"] = "otc_live_cbb14cd28e7235495a2944f53435fc8583278c4a50adf515e0a732875db8798e"
 
 TELEGRAM_TOKEN = "8531787721:AAH6dmi42q9BGw7rsdJYW7Ux3gfJj7iZ51E"
 TELEGRAM_CHAT_ID = "8758991455"
@@ -116,27 +116,30 @@ def send_telegram_alert(message):
 
 def get_otc_data(symbol, period, max_candles):
     """
-    جلب بيانات OTC من OTCharts
+    جلب بيانات OTC من OTCharts باستخدام دالة dataframe المدمجة
     """
     try:
         otc = Client()
-        # الدفتر "otc" هو Pocket Option، ورموز الأدوات بالصيغة EURUSD_otc
-        bars = otc.candles("otc", symbol, tf=period, limit=max_candles)
+        # استخدام dataframe مباشرة بدلاً من candles
+        df = otc.dataframe("otc", symbol, tf=period, limit=max_candles)
         
-        if not bars:
+        if df is None or df.empty:
             return None
             
-        # تحويل إلى DataFrame
-        df = bars.dataframe()
-        
-        # توحيد أسماء الأعمدة
-        df['time'] = pd.to_datetime(df['time'], unit='s')
-        
-        # الاحتفاظ بالأعمدة المطلوبة فقط والتأكد من النوع float
-        df = df[['time', 'open', 'high', 'low', 'close']].copy()
-        for col in ['open', 'high', 'low', 'close']:
-            df[col] = df[col].astype(float)
+        # التأكد من وجود عمود الوقت وتحويله
+        if 'time' in df.columns:
+            df['time'] = pd.to_datetime(df['time'], unit='s')
+        elif 'timestamp' in df.columns:
+            df['time'] = pd.to_datetime(df['timestamp'], unit='s')
             
+        # الاحتفاظ بالأعمدة المطلوبة فقط والتأكد من النوع float
+        cols_to_keep = ['time', 'open', 'high', 'low', 'close']
+        df = df[[c for c in cols_to_keep if c in df.columns]].copy()
+        
+        for col in ['open', 'high', 'low', 'close']:
+            if col in df.columns:
+                df[col] = df[col].astype(float)
+                
         return df.tail(max_candles).reset_index(drop=True)
     except Exception as e:
         st.error(f"فشل جلب البيانات من OTCharts: {e}")
