@@ -3,4 +3,3 @@ pandas
 plotly
 requests
 otcharts[pandas]
-streamlit-js-eval
