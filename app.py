@@ -7,7 +7,7 @@ import time
 import requests
 import os
 from datetime import datetime, timedelta
-from streamlit_js_eval import streamlit_js_eval
+# from streamlit_js_eval import streamlit_js_eval   # ⛔ معطّل: سبب ModuleNotFoundError
 from otcharts import Client
 from io import BytesIO
 
@@ -40,7 +40,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.markdown('<div class="main-header">👑 ELZOGHEIR CANDLE-VIP</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-header">ULTIMATE TRADING SYSTEM • LITE EDITION • 5 PAIRS</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-header">ULTIMATE TRADING SYSTEM • LITE EDITION</div>', unsafe_allow_html=True)
 
 # ============================================================
 # 2. بيانات الاعتماد والإعدادات
@@ -51,27 +51,99 @@ TELEGRAM_TOKEN = "8531787721:AAH6dmi42q9BGw7rsdJYW7Ux3gfJj7iZ51E"
 TELEGRAM_CHAT_ID = "8758991455"
 CSV_FILE = "elzogheir_vip_log.csv"
 
-# 🔥 أفضل 5 أزواج لخطة OTCharts Lite (متوافقة مع Pocket Option)
-PAIRS = [
-    "EURUSD_otc",   # عائد ~92%
-    "GBPUSD_otc",   # عائد ~77%
-    "USDJPY_otc",   # عائد ~80%
-    "AUDCAD_otc",   # عائد ~92%
-    "EURGBP_otc",   # عائد ~62% (مفتوح افتراضيًا في OTCharts)
+# ⚠️ سيتم استبدالها تلقائيًا من symbols("otc") إن أمكن
+DEFAULT_PAIRS = [
+    "EURUSD_otc",
+    "GBPUSD_otc",
+    "USDJPY_otc",
+    "AUDCAD_otc",
+    "EURGBP_otc",
 ]
 
-# ⏱️ مدة التحذير قبل الدخول (بالثواني)
 ALERT_DELAY_SECONDS = 30
-
-# 🌍 إزاحة توقيت دفتر Pocket Option (UTC+3)
-POCKET_OPTION_TZ_OFFSET = 3
+POCKET_OPTION_TZ_OFFSET = 2  # التوقيت الرسمي لدفتر Pocket Option (UTC+2)
 
 # ============================================================
-# 3. الشريط الجانبي
+# 3. دوال العميل والبيانات
 # ============================================================
+@st.cache_resource(show_spinner=False)
+def get_otc_client():
+    return Client()
+
+def get_available_symbols():
+    """إرجاع قائمة الأدوات المتاحة فعليًا في خطتك"""
+    try:
+        otc = get_otc_client()
+        syms = otc.symbols("otc")
+        # قد تكون list[str] أو list[obj]
+        return [s if isinstance(s, str) else getattr(s, "symbol", str(s)) for s in syms]
+    except Exception as e:
+        st.warning(f"تعذر جلب قائمة الأدوات: {e}")
+        return []
+
+def get_otc_data(symbol, period, max_candles):
+    try:
+        otc = get_otc_client()
+        available = get_available_symbols()
+        if available and symbol not in available:
+            st.warning(f"⚠️ الرمز {symbol} غير متاح في خطتك الحالية.")
+            return None
+
+        df = otc.dataframe("otc", symbol, tf=period, limit=max_candles)
+        if df is None or df.empty:
+            return None
+
+        time_col = None
+        for candidate in ['time', 'timestamp', 'date', 'datetime']:
+            if candidate in df.columns:
+                time_col = candidate
+                break
+
+        if time_col is not None:
+            if pd.api.types.is_numeric_dtype(df[time_col]):
+                df['time'] = pd.to_datetime(df[time_col], unit='s')
+            else:
+                df['time'] = pd.to_datetime(df[time_col])
+        else:
+            df['time'] = pd.date_range(end=datetime.now(), periods=len(df), freq=f'{period}s')
+
+        required = ['open', 'high', 'low', 'close']
+        for col in required:
+            if col not in df.columns:
+                alt = [c for c in df.columns if c.lower() == col]
+                if alt:
+                    df[col] = df[alt[0]]
+                else:
+                    st.error(f"العمود '{col}' مفقود. الأعمدة المتاحة: {list(df.columns)}")
+                    return None
+            df[col] = pd.to_numeric(df[col], errors='coerce')
+
+        df = df.dropna(subset=required)
+        if df.empty:
+            return None
+
+        df = df[['time'] + required].copy()
+        return df.tail(max_candles).reset_index(drop=True)
+    except Exception as e:
+        st.error(f"فشل جلب البيانات من OTCharts: {e}")
+        return None
+
+# ============================================================
+# 4. الشريط الجانبي (يُبنى بعد معرفة الأدوات المتاحة)
+# ============================================================
+available_symbols = get_available_symbols()
+PAIRS = [s for s in DEFAULT_PAIRS if (not available_symbols or s in available_symbols)] or available_symbols or DEFAULT_PAIRS
+
 with st.sidebar:
-    st.markdown("### ⚙️ إعدادات VIP (Lite)")
-    symbol = st.selectbox("الزوج / الأصل (5 أزواج)", PAIRS)
+    st.markdown("### ⚙️ إعدادات VIP")
+    if not available_symbols:
+        st.error("⚠️ تعذر الاتصال بـ OTCharts. تحقق من مفتاح API.")
+    else:
+        st.success(f"✅ أدوات متاحة: {len(available_symbols)}")
+        with st.expander("عرض الأدوات المتاحة"):
+            st.write(available_symbols)
+
+    symbol = st.selectbox("الزوج / الأصل", PAIRS if PAIRS else ["—"])
     period = st.selectbox("الإطار الزمني",
         [15, 30, 60, 180, 300, 900, 1800],
         format_func=lambda x: {15: "15 ثانية", 30: "30 ثانية", 60: "دقيقة", 180: "3 دقائق", 300: "5 دقائق", 900: "15 دقيقة", 1800: "30 دقيقة"}[x],
@@ -109,14 +181,15 @@ with st.sidebar:
         st.rerun()
 
 # ============================================================
-# 4. دوال مساعدة
+# 5. دوال مساعدة (صوت + تيليجرام)
 # ============================================================
 def play_sound():
+    """تم استبدال streamlit_js_eval بـ st.audio المدمج"""
     if enable_sound:
-        streamlit_js_eval(
-            js_expressions="new Audio('https://actions.google.com/sounds/v1/alarms/beep_short.ogg').play()",
-            key=f"sound_{time.time()}"
-        )
+        try:
+            st.audio("https://actions.google.com/sounds/v1/alarms/beep_short.ogg", format="audio/ogg")
+        except Exception:
+            pass
 
 def send_telegram_alert(message):
     if not enable_telegram or TELEGRAM_TOKEN == "ضع_التوكن_هنا":
@@ -128,66 +201,8 @@ def send_telegram_alert(message):
     except:
         pass
 
-@st.cache_resource(show_spinner=False)
-def get_otc_client():
-    return Client()
-
-def get_otc_data(symbol, period, max_candles):
-    """جلب بيانات OTC من OTCharts مع التحقق الديناميكي من الرمز"""
-    try:
-        otc = get_otc_client()
-
-        try:
-            available = otc.symbols("otc")
-            if symbol not in available:
-                st.warning(f"⚠️ الرمز {symbol} غير متاح حاليًا.")
-                return None
-        except:
-            pass
-
-        df = otc.dataframe("otc", symbol, tf=period, limit=max_candles)
-
-        if df is None or df.empty:
-            return None
-
-        time_col = None
-        for candidate in ['time', 'timestamp', 'date', 'datetime']:
-            if candidate in df.columns:
-                time_col = candidate
-                break
-
-        if time_col is not None:
-            if pd.api.types.is_numeric_dtype(df[time_col]):
-                df['time'] = pd.to_datetime(df[time_col], unit='s')
-            else:
-                df['time'] = pd.to_datetime(df[time_col])
-        else:
-            df['time'] = pd.date_range(end=datetime.now(), periods=len(df), freq=f'{period}s')
-
-        required = ['open', 'high', 'low', 'close']
-        for col in required:
-            if col not in df.columns:
-                alt = [c for c in df.columns if c.lower() == col]
-                if alt:
-                    df[col] = df[alt[0]]
-                else:
-                    st.error(f"العمود '{col}' مفقود. الأعمدة المتاحة: {list(df.columns)}")
-                    return None
-            df[col] = pd.to_numeric(df[col], errors='coerce')
-
-        df = df.dropna(subset=required)
-        if df.empty:
-            return None
-
-        df = df[['time'] + required].copy()
-        return df.tail(max_candles).reset_index(drop=True)
-
-    except Exception as e:
-        st.error(f"فشل جلب البيانات من OTCharts: {e}")
-        return None
-
 # ============================================================
-# 5. المؤشرات والأنماط
+# 6. المؤشرات والأنماط
 # ============================================================
 def calculate_indicators(df):
     delta = df['close'].diff()
@@ -230,7 +245,7 @@ def detect_patterns(df):
     return patterns
 
 # ============================================================
-# 6. منطق الإشارة (مع فلترة الجلسات والاتجاه)
+# 7. منطق الإشارة
 # ============================================================
 def generate_signal(patterns, df, higher_tf_df):
     buys = sum(1 for _, _, s in patterns if s == "buy")
@@ -239,7 +254,6 @@ def generate_signal(patterns, df, higher_tf_df):
     last_rsi = df['RSI'].iloc[-1]; last_macd = df['MACD_Hist'].iloc[-1]
     last_close = df['close'].iloc[-1]; last_ema = df['EMA200'].iloc[-1]
 
-    # ✅ تصحيح التوقيت: دفتر Pocket Option يستخدم UTC+3
     current_hour = (datetime.utcnow() + timedelta(hours=POCKET_OPTION_TZ_OFFSET)).hour
     is_active_session = 7 <= current_hour <= 21
 
@@ -249,22 +263,20 @@ def generate_signal(patterns, df, higher_tf_df):
         higher_ema = higher_tf_df['close'].ewm(span=200, adjust=False).mean().iloc[-1]
         higher_trend = "UP" if higher_close > higher_ema else "DOWN"
 
-    reason = ""
-    if not is_active_session:
-        reason = "⚠️ جلسة غير نشطة"
+    reason = "⚠️ جلسة غير نشطة" if not is_active_session else ""
 
     if buys > sells and last_rsi < 70 and last_macd > 0 and last_close > last_ema and higher_trend == "UP" and is_active_session:
-        return "STRONG BUY", buys, sells, "توافق كامل (أنماط + RSI + MACD + EMA + إطار أكبر + جلسة)"
+        return "STRONG BUY", buys, sells, "توافق كامل"
     elif sells > buys and last_rsi > 30 and last_macd < 0 and last_close < last_ema and higher_trend == "DOWN" and is_active_session:
-        return "STRONG SELL", buys, sells, "توافق كامل (أنماط + RSI + MACD + EMA + إطار أكبر + جلسة)"
+        return "STRONG SELL", buys, sells, "توافق كامل"
     elif buys > sells:
-        return "WEAK BUY", buys, sells, f"أنماط شراء فقط ({reason if reason else 'بدون تأكيد'})"
+        return "WEAK BUY", buys, sells, reason or "أنماط شراء فقط"
     elif sells > buys:
-        return "WEAK SELL", buys, sells, f"أنماط بيع فقط ({reason if reason else 'بدون تأكيد'})"
+        return "WEAK SELL", buys, sells, reason or "أنماط بيع فقط"
     return "NEUTRAL", buys, sells, "لا توجد إشارة"
 
 # ============================================================
-# 7. إدارة السجل والتحليلات
+# 8. السجل والتقييم
 # ============================================================
 def log_trade(symbol, signal, entry_price, timeframe, stake):
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -295,7 +307,7 @@ def evaluate_trades(current_price):
         df.to_csv(CSV_FILE, index=False)
 
 # ============================================================
-# 8. الرسم البياني وتصدير الصورة
+# 9. الرسم البياني
 # ============================================================
 def plot_chart(df, patterns, symbol):
     fig = make_subplots(rows=3, cols=1, shared_xaxes=True, vertical_spacing=0.05,
@@ -342,207 +354,171 @@ def plot_chart(df, patterns, symbol):
     fig.update_yaxes(gridcolor="#1F2A3C", side="right")
     return fig
 
-def export_chart_image(fig, symbol):
-    try:
-        img_bytes = fig.to_image(format="png", width=1200, height=700, scale=2)
-        st.download_button(
-            label="📥 تحميل الرسم البياني كصورة (PNG)",
-            data=img_bytes,
-            file_name=f"{symbol}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png",
-            mime="image/png",
-            use_container_width=True
-        )
-    except:
-        st.info("لتحميل الصورة، ثبّت kaleido: py -m pip install kaleido")
-
 # ============================================================
-# 9. العرض الرئيسي
+# 10. العرض الرئيسي
 # ============================================================
 if st.session_state.get('run_scan') or enable_auto_refresh:
-    df = get_otc_data(symbol, period, max_candles)
+    if not available_symbols:
+        st.error("لا يمكن بدء التحليل: لا توجد أدوات متاحة أو مفتاح API غير صالح.")
+    else:
+        df = get_otc_data(symbol, period, max_candles)
 
-    if df is not None and len(df) > 0:
-        df = calculate_indicators(df)
+        if df is not None and len(df) > 0:
+            df = calculate_indicators(df)
 
-        higher_tf = 300 if period < 300 else 900
-        higher_df = get_otc_data(symbol, higher_tf, 50)
-        if higher_df is not None:
-            higher_df = calculate_indicators(higher_df)
+            higher_tf = 300 if period < 300 else 900
+            higher_df = get_otc_data(symbol, higher_tf, 50)
+            if higher_df is not None:
+                higher_df = calculate_indicators(higher_df)
 
-        patterns = detect_patterns(df)
-        signal, buys, sells, reason = generate_signal(patterns, df, higher_df)
-        current_price = df['close'].iloc[-1]
+            patterns = detect_patterns(df)
+            signal, buys, sells, reason = generate_signal(patterns, df, higher_df)
+            current_price = df['close'].iloc[-1]
 
-        evaluate_trades(current_price)
+            evaluate_trades(current_price)
 
-        current_stake = base_stake
-        if os.path.exists(CSV_FILE) and martingale_mode:
-            log_df = pd.read_csv(CSV_FILE)
-            completed = log_df[log_df['Result'].isin(['WIN', 'LOSS'])]
-            if len(completed) > 0:
-                last_result = completed.iloc[-1]['Result']
-                last_stake = completed.iloc[-1]['Stake']
-                if last_result == 'LOSS':
-                    current_stake = last_stake * 2
+            current_stake = base_stake
+            if os.path.exists(CSV_FILE) and martingale_mode:
+                log_df = pd.read_csv(CSV_FILE)
+                completed = log_df[log_df['Result'].isin(['WIN', 'LOSS'])]
+                if len(completed) > 0:
+                    last_result = completed.iloc[-1]['Result']
+                    last_stake = completed.iloc[-1]['Stake']
+                    if last_result == 'LOSS':
+                        current_stake = last_stake * 2
 
-        # ============================================================
-        # 🔔 منطق الإشارة مع التحذير المسبق (30 ثانية)
-        # ============================================================
-        last_signal = st.session_state.get('last_signal', None)
+            # --- منطق التحذير المسبق 30 ثانية ---
+            last_signal = st.session_state.get('last_signal', None)
 
-        # 1) اكتشاف إشارة قوية جديدة
-        if signal in ["STRONG BUY", "STRONG SELL"] and signal != last_signal:
-            if st.session_state.get('pending_signal') != signal:
-                st.session_state['signal_detected_time'] = time.time()
-                st.session_state['pending_signal'] = signal
-                st.session_state['pending_price'] = current_price
-                st.session_state['pending_stake'] = current_stake
-                st.session_state['alert_sent'] = False
+            if signal in ["STRONG BUY", "STRONG SELL"] and signal != last_signal:
+                if st.session_state.get('pending_signal') != signal:
+                    st.session_state['signal_detected_time'] = time.time()
+                    st.session_state['pending_signal'] = signal
+                    st.session_state['pending_price'] = current_price
+                    st.session_state['pending_stake'] = current_stake
+                    st.session_state['alert_sent'] = False
 
-                msg = (
-                    f"⚠️ <b>تحذير مسبق — دخول بعد {ALERT_DELAY_SECONDS} ثانية</b>\n"
-                    f"💰 الزوج: {symbol}\n"
-                    f"📊 الإشارة: {signal}\n"
-                    f"💵 السعر المتوقع: {current_price:.5f}\n"
-                    f"💸 حجم الدخول المتوقع: ${current_stake}\n"
-                    f"📝 {reason}\n"
-                    f"⏳ يرجى الاستعداد للدخول!"
-                )
-                if enable_telegram:
-                    send_telegram_alert(msg)
-                play_sound()
-                st.session_state['alert_sent'] = True
+                    msg = (
+                        f"⚠️ <b>تحذير مسبق — دخول بعد {ALERT_DELAY_SECONDS} ثانية</b>\n"
+                        f"💰 {symbol}\n📊 {signal}\n💵 {current_price:.5f}\n"
+                        f"💸 ${current_stake}\n📝 {reason}"
+                    )
+                    if enable_telegram:
+                        send_telegram_alert(msg)
+                    play_sound()
+                    st.session_state['alert_sent'] = True
 
-        # 2) عرض العداد التنازلي + تنفيذ الدخول
-        if st.session_state.get('pending_signal') == signal:
-            elapsed = time.time() - st.session_state.get('signal_detected_time', time.time())
-            remaining = int(ALERT_DELAY_SECONDS - elapsed)
+            if st.session_state.get('pending_signal') == signal:
+                elapsed = time.time() - st.session_state.get('signal_detected_time', time.time())
+                remaining = int(ALERT_DELAY_SECONDS - elapsed)
 
-            if remaining > 0:
-                st.markdown(f"""
-                <div class="warning-box">
-                    <div class="countdown-label">⚠️ تحذير: الدخول خلال {remaining} ثانية</div>
-                    <div class="warning-time">{remaining}</div>
-                    <div style="color:#FFD700; margin-top:8px; font-size:1rem;">
-                        الإشارة: <b>{signal}</b> — الزوج: <b>{symbol}</b>
+                if remaining > 0:
+                    st.markdown(f"""
+                    <div class="warning-box">
+                        <div class="countdown-label">⚠️ الدخول خلال {remaining} ثانية</div>
+                        <div class="warning-time">{remaining}</div>
+                        <div style="color:#FFD700; margin-top:8px;">{signal} — {symbol}</div>
                     </div>
-                </div>
-                """, unsafe_allow_html=True)
-                time.sleep(1)
-                st.rerun()
-            else:
-                actual_entry_price = df['close'].iloc[-1]
-                final_stake = st.session_state.get('pending_stake', current_stake)
+                    """, unsafe_allow_html=True)
+                    time.sleep(1)
+                    st.rerun()
+                else:
+                    actual_entry_price = df['close'].iloc[-1]
+                    final_stake = st.session_state.get('pending_stake', current_stake)
+                    msg = (
+                        f"👑 <b>ELZOGHEIR VIP: تنفيذ {signal}</b>\n"
+                        f"💰 {symbol}\n💵 {actual_entry_price:.5f}\n"
+                        f"💸 ${final_stake}\n📝 {reason}"
+                    )
+                    if enable_telegram:
+                        send_telegram_alert(msg)
+                    play_sound()
+                    log_trade(symbol, signal, actual_entry_price, period, final_stake)
+                    st.session_state['last_signal'] = signal
+                    st.session_state['trade_opened_time'] = time.time()
+                    st.session_state['active_stake'] = final_stake
+                    st.session_state['pending_signal'] = None
+                    st.session_state['signal_detected_time'] = None
+                    st.session_state['alert_sent'] = False
+                    st.rerun()
 
-                msg = (
-                    f"👑 <b>ELZOGHEIR VIP: تنفيذ {signal}</b>\n"
-                    f"💰 {symbol}\n"
-                    f"💵 سعر الدخول: {actual_entry_price:.5f}\n"
-                    f"💸 حجم الدخول: ${final_stake}\n"
-                    f"📝 {reason}"
-                )
-                if enable_telegram:
-                    send_telegram_alert(msg)
-                play_sound()
+            # --- البطاقات ---
+            c1, c2, c3, c4 = st.columns(4)
+            with c1:
+                st.markdown(f'<div class="metric-card"><div class="metric-label">السعر</div><div class="metric-value">{current_price:,.5f}</div></div>', unsafe_allow_html=True)
+            with c2:
+                rsi_val = df['RSI'].iloc[-1]
+                cls = "sell-signal" if rsi_val > 70 else "buy-signal" if rsi_val < 30 else ""
+                st.markdown(f'<div class="metric-card"><div class="metric-label">RSI</div><div class="metric-value {cls}">{rsi_val:.1f}</div></div>', unsafe_allow_html=True)
+            with c3:
+                trend = "صاعد ↗" if current_price > df['EMA200'].iloc[-1] else "هابط ↘"
+                t_cls = "buy-signal" if "صاعد" in trend else "sell-signal"
+                st.markdown(f'<div class="metric-card"><div class="metric-label">الاتجاه</div><div class="metric-value {t_cls}">{trend}</div></div>', unsafe_allow_html=True)
+            with c4:
+                st.markdown(f'<div class="metric-card"><div class="metric-label">حجم الدخول</div><div class="metric-value" style="color:#FFD700">${current_stake}</div></div>', unsafe_allow_html=True)
 
-                log_trade(symbol, signal, actual_entry_price, period, final_stake)
-                st.session_state['last_signal'] = signal
-                st.session_state['trade_opened_time'] = time.time()
-                st.session_state['active_stake'] = final_stake
+            st.markdown("<br>", unsafe_allow_html=True)
 
-                st.session_state['pending_signal'] = None
-                st.session_state['signal_detected_time'] = None
-                st.session_state['alert_sent'] = False
+            fig = plot_chart(df, patterns, symbol)
+            st.plotly_chart(fig, use_container_width=True)
 
-                st.rerun()
+            sig_color = "buy-signal" if "BUY" in signal else "sell-signal" if "SELL" in signal else "neutral-signal"
+            emoji = "🟢" if "BUY" in signal else "🔴" if "SELL" in signal else "🟡"
+            st.markdown(f"""
+            <div class="metric-card" style="margin-bottom: 10px; border-color: #FFD700;">
+                <div class="metric-label">الإشارة النهائية</div>
+                <div class="metric-value {sig_color}" style="font-size: 1.8rem;">{emoji} {signal}</div>
+                <div style="color:#8899AA; font-size:0.9rem;">{reason}</div>
+            </div>
+            """, unsafe_allow_html=True)
 
-        # ============================================================
-        # عرض البطاقات
-        # ============================================================
-        c1, c2, c3, c4 = st.columns(4)
-        with c1:
-            st.markdown(f'<div class="metric-card"><div class="metric-label">السعر</div>'
-                        f'<div class="metric-value">{current_price:,.5f}</div></div>',
-                        unsafe_allow_html=True)
-        with c2:
-            rsi_val = df['RSI'].iloc[-1]
-            cls = "sell-signal" if rsi_val > 70 else "buy-signal" if rsi_val < 30 else ""
-            st.markdown(f'<div class="metric-card"><div class="metric-label">RSI</div>'
-                        f'<div class="metric-value {cls}">{rsi_val:.1f}</div></div>',
-                        unsafe_allow_html=True)
-        with c3:
-            trend = "صاعد ↗" if current_price > df['EMA200'].iloc[-1] else "هابط ↘"
-            t_cls = "buy-signal" if "صاعد" in trend else "sell-signal"
-            st.markdown(f'<div class="metric-card"><div class="metric-label">الاتجاه</div>'
-                        f'<div class="metric-value {t_cls}">{trend}</div></div>',
-                        unsafe_allow_html=True)
-        with c4:
-            st.markdown(f'<div class="metric-card"><div class="metric-label">حجم الدخول</div>'
-                        f'<div class="metric-value" style="color:#FFD700">${current_stake}</div></div>',
-                        unsafe_allow_html=True)
+            if st.session_state.get('trade_opened_time') and signal in ["STRONG BUY", "STRONG SELL"]:
+                elapsed = time.time() - st.session_state['trade_opened_time']
+                remaining = int(period - elapsed)
+                if remaining > 0:
+                    st.markdown(f"""
+                    <div class="countdown-box">
+                        <div class="countdown-label">⏳ الوقت المتبقي لإغلاق الصفقة (ثانية)</div>
+                        <div class="countdown-time">{remaining}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    time.sleep(1)
+                    st.rerun()
+                else:
+                    st.success("✅ انتهت مدة الصفقة! تم تقييمها في السجل.")
+                    st.session_state['trade_opened_time'] = None
 
-        st.markdown("<br>", unsafe_allow_html=True)
+            if os.path.exists(CSV_FILE):
+                log_df = pd.read_csv(CSV_FILE)
+                with st.expander("📊 لوحة التحليلات"):
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        wins = len(log_df[log_df['Result'] == 'WIN'])
+                        losses = len(log_df[log_df['Result'] == 'LOSS'])
+                        if wins + losses > 0:
+                            pie_fig = go.Figure(data=[go.Pie(labels=['Wins', 'Losses'],
+                                                              values=[wins, losses], hole=.4,
+                                                              marker_colors=['#00FFAA', '#FF3355'])])
+                            pie_fig.update_layout(template="plotly_dark",
+                                                  paper_bgcolor="rgba(0,0,0,0)",
+                                                  height=300, margin=dict(t=10, b=10))
+                            st.plotly_chart(pie_fig, use_container_width=True)
+                    with col2:
+                        completed = log_df[log_df['Result'].isin(['WIN', 'LOSS'])]
+                        if len(completed) > 0:
+                            pair_stats = completed.groupby('Symbol')['Result'].value_counts().unstack(fill_value=0)
+                            st.dataframe(pair_stats, use_container_width=True)
+                        st.download_button("📥 تحميل السجل (CSV)",
+                                           log_df.to_csv(index=False).encode('utf-8'),
+                                           "elzogheir_log.csv", "text/csv",
+                                           use_container_width=True)
+        else:
+            st.warning(f"تعذر جلب بيانات {symbol}. قد يكون الرمز غير متاح في خطتك أو الاتصال ضعيفًا.")
 
-        fig = plot_chart(df, patterns, symbol)
-        st.plotly_chart(fig, use_container_width=True)
-        export_chart_image(fig, symbol)
-
-        sig_color = "buy-signal" if "BUY" in signal else "sell-signal" if "SELL" in signal else "neutral-signal"
-        emoji = "🟢" if "BUY" in signal else "🔴" if "SELL" in signal else "🟡"
-        st.markdown(f"""
-        <div class="metric-card" style="margin-bottom: 10px; border-color: #FFD700;">
-            <div class="metric-label">الإشارة النهائية</div>
-            <div class="metric-value {sig_color}" style="font-size: 1.8rem;">{emoji} {signal}</div>
-            <div style="color:#8899AA; font-size:0.9rem;">{reason}</div>
-        </div>
-        """, unsafe_allow_html=True)
-
-        if st.session_state.get('trade_opened_time') and signal in ["STRONG BUY", "STRONG SELL"]:
-            elapsed = time.time() - st.session_state['trade_opened_time']
-            remaining = int(period - elapsed)
-            if remaining > 0:
-                st.markdown(f"""
-                <div class="countdown-box">
-                    <div class="countdown-label">⏳ الوقت المتبقي لإغلاق صفقة {symbol} (ثانية)</div>
-                    <div class="countdown-time">{remaining}</div>
-                </div>
-                """, unsafe_allow_html=True)
-                time.sleep(1)
-                st.rerun()
-            else:
-                st.success("✅ انتهت مدة الصفقة! تم تقييمها في السجل.")
-                st.session_state['trade_opened_time'] = None
-
-        if os.path.exists(CSV_FILE):
-            log_df = pd.read_csv(CSV_FILE)
-            with st.expander("📊 لوحة التحليلات وإدارة رأس المال"):
-                col1, col2 = st.columns(2)
-                with col1:
-                    wins = len(log_df[log_df['Result'] == 'WIN'])
-                    losses = len(log_df[log_df['Result'] == 'LOSS'])
-                    if wins + losses > 0:
-                        pie_fig = go.Figure(data=[go.Pie(labels=['Wins', 'Losses'],
-                                                          values=[wins, losses], hole=.4,
-                                                          marker_colors=['#00FFAA', '#FF3355'])])
-                        pie_fig.update_layout(template="plotly_dark",
-                                              paper_bgcolor="rgba(0,0,0,0)",
-                                              height=300, margin=dict(t=10, b=10))
-                        st.plotly_chart(pie_fig, use_container_width=True)
-                with col2:
-                    st.markdown("### أفضل الأزواج (Top Pairs)")
-                    completed = log_df[log_df['Result'].isin(['WIN', 'LOSS'])]
-                    if len(completed) > 0:
-                        pair_stats = completed.groupby('Symbol')['Result'].value_counts().unstack(fill_value=0)
-                        st.dataframe(pair_stats, use_container_width=True)
-                    st.download_button("📥 تحميل السجل (CSV)",
-                                       log_df.to_csv(index=False).encode('utf-8'),
-                                       "elzogheir_log.csv", "text/csv",
-                                       use_container_width=True)
-
-# مسح السوق (Scanner)
+# --- Scanner ---
 if st.session_state.get('run_scanner'):
-    st.markdown("### 🔍 نتائج مسح السوق (Scanner)")
-    with st.spinner("جاري فحص الأزواج الخمسة..."):
+    st.markdown("### 🔍 نتائج مسح السوق")
+    with st.spinner("جاري الفحص..."):
         results = []
         for p in PAIRS:
             d = get_otc_data(p, 60, 100)
@@ -554,9 +530,9 @@ if st.session_state.get('run_scanner'):
         if results:
             st.table(pd.DataFrame(results))
         else:
-            st.warning("لم يتمكن الماسح من جلب البيانات. تحقق من الاتصال بـ OTCharts.")
+            st.warning("لم يتمكن الماسح من جلب البيانات.")
 
-else:
+if not st.session_state.get('run_scan') and not enable_auto_refresh and not st.session_state.get('run_scanner'):
     st.info("👈 اضغط **مزامنة وتحليل** في الشريط الجانبي لبدء التحليل.")
 
 if enable_auto_refresh:
